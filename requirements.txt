@@ -1,3 +1,5 @@
+
+
 streamlit
 langchain
 langchain-community
@@ -5,8 +7,5 @@ langchain-chroma
 langchain-groq
 langchain-huggingface
 python-dotenv
-pypdf2
-pandas
 pypdf
-
-google-cloud-aiplatform
+pandas
