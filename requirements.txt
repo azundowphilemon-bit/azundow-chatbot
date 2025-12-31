@@ -7,4 +7,6 @@ langchain-huggingface
 python-dotenv
 pypdf2
 pandas
+pypdf
+
 google-cloud-aiplatform
