@@ -85,7 +85,7 @@ if st.session_state.chain is None:
             | llm
             | StrOutputParser()
         )
-        st.success("Documents loaded — ready!")
+        st.success("Ask questions on Python")
     else:
         st.info("No documents loaded — general Python help available")
 
@@ -110,6 +110,7 @@ if prompt := st.chat_input("Ask anything..."):
 
 st.markdown("---")
 st.caption("Azundow Intelligent Document Chatbot — Fast • Professional")
+
 
 
 
