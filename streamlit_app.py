@@ -21,7 +21,7 @@ if not api_key:
     st.info("The .env file should contain: GROQ_API_KEY=your_key_here")
     st.stop()
 
-# Page config
+# Page config — MUST BE FIRST
 st.set_page_config(page_title="Azundow Intelligent Document Chatbot", page_icon="🤖", layout="centered")
 
 # Title with logo
@@ -56,14 +56,17 @@ if st.session_state.chain is None:
                     loader = CSVLoader(file_path)
                 docs.extend(loader.load())
         else:
-            st.info("No documents found in 'documents' folder.")
+            st.info("No documents found in 'documents' folder — general chat mode")
     else:
-        st.info("No 'documents' folder found.")
+        st.info("No 'documents' folder found — general chat mode")
 
     if docs:
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents(docs)
-        embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        embeddings = HuggingFaceEmbeddings(
+            model_name="all-MiniLM-L6-v2",
+            model_kwargs={"device": "cpu"}  # fixes meta tensor error on Streamlit Cloud
+        )
         vector_store = Chroma.from_documents(documents=splits, embedding=embeddings)
         llm = ChatGroq(groq_api_key=api_key, model_name="llama-3.1-8b-instant", temperature=0.3)
         prompt = ChatPromptTemplate.from_template(
@@ -84,7 +87,7 @@ if st.session_state.chain is None:
         )
         st.success("Documents loaded — ready!")
     else:
-        st.info("No documents loaded — general Python help available.")
+        st.info("No documents loaded — general Python help available")
 
 # Chat interface
 for message in st.session_state.messages:
@@ -107,6 +110,7 @@ if prompt := st.chat_input("Ask anything..."):
 
 st.markdown("---")
 st.caption("Azundow Intelligent Document Chatbot — Fast • Professional")
+
 
 
 
