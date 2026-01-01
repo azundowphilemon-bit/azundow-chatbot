@@ -10,38 +10,27 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
-# Load .env
+# Load .env file
 load_dotenv()
 
+# Get API key
 api_key = os.getenv("GROQ_API_KEY")
+
 if not api_key:
-    st.error("Groq API key not found. Check .env file or Streamlit secrets.")
+    st.error("Groq API key not found. Please check your .env file in the main project folder.")
+    st.info("The .env file should contain: GROQ_API_KEY=your_key_here")
     st.stop()
 
 # Page config
 st.set_page_config(page_title="Azundow Intelligent Document Chatbot", page_icon="🤖", layout="centered")
 
-# CSS for style
-st.markdown("""
-<style>
-    .main {
-        background: linear-gradient(to bottom, #1e3c72, #2a5298);
-        padding: 20px;
-    }
-    h1 { color: white; text-align: center; font-weight: 700; }
-    .stCaption { text-align: center; color: rgba(255,255,255,0.8); font-size: 1.1em; }
-    .stChatMessage { background-color: rgba(255,255,255,0.1); border-radius: 15px; padding: 15px; margin: 10px 0; border: 1px solid rgba(255,255,255,0.2); }
-    .stChatInput > div { background-color: rgba(255,255,255,0.2); border-radius: 25px; border: 1px solid rgba(255,255,255,0.3); }
-    #MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}
-</style>
-""", unsafe_allow_html=True)
-
-# Header
+# Title with logo
 col1, col2 = st.columns([1, 5])
 with col1:
     st.image("logo.png", width=100)
 with col2:
     st.markdown("<h1 style='margin-top: 30px;'>Azundow Intelligent Document Chatbot</h1>", unsafe_allow_html=True)
+
 st.caption("Built by Azundow — Ask questions on Python")
 
 # Session state
@@ -50,7 +39,7 @@ if "messages" not in st.session_state:
 if "chain" not in st.session_state:
     st.session_state.chain = None
 
-# Load documents & create RAG chain
+# Load documents from "documents" folder
 if st.session_state.chain is None:
     documents_folder = "documents"
     docs = []
@@ -60,68 +49,48 @@ if st.session_state.chain is None:
         if files:
             for filename in files:
                 file_path = os.path.join(documents_folder, filename)
-                try:
-                    if filename.lower().endswith(".pdf"):
-                        loader = PyPDFLoader(file_path)
-                    elif filename.lower().endswith(".csv"):
-                        loader = CSVLoader(file_path)
-                    docs.extend(loader.load())
-                except Exception as e:
-                    st.warning(f"Could not load {filename}: {e}")
+                ext = filename.lower().split(".")[-1]
+                if ext == "pdf":
+                    loader = PyPDFLoader(file_path)
+                elif ext == "csv":
+                    loader = CSVLoader(file_path)
+                docs.extend(loader.load())
         else:
-            st.info("No documents found — general chat mode")
+            st.info("No documents found in 'documents' folder.")
     else:
-        st.info("No 'documents' folder — general chat mode")
+        st.info("No 'documents' folder found.")
 
     if docs:
-        try:
-            # Split text
-            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-            splits = text_splitter.split_documents(docs)
-
-            # CPU-safe embeddings
-            embeddings = HuggingFaceEmbeddings(
-                model_name="all-MiniLM-L6-v2",
-                model_kwargs={"device": "cpu"}  # Force CPU
-            )
-
-            # Vector store
-            vector_store = Chroma.from_documents(documents=splits, embedding=embeddings)
-
-            # LLM
-            llm = ChatGroq(groq_api_key=api_key, model_name="llama-3.1-8b-instant", temperature=0.3)
-
-            # Prompt template
-            prompt = ChatPromptTemplate.from_template(
-                """You are a helpful Python tutor.
-                Use only the context below.
-                Answer in your own words.
-                Be clear and friendly.
-                Context: {context}
-                Question: {question}
-                Answer:"""
-            )
-
-            retriever = vector_store.as_retriever(search_kwargs={"k": 4})
-            st.session_state.chain = (
-                {"context": retriever, "question": RunnablePassthrough()}
-                | prompt
-                | llm
-                | StrOutputParser()
-            )
-
-            st.success("Documents loaded — ready!")
-        except Exception as e:
-            st.error(f"Error setting up AI chain: {e}")
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        splits = text_splitter.split_documents(docs)
+        embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        vector_store = Chroma.from_documents(documents=splits, embedding=embeddings)
+        llm = ChatGroq(groq_api_key=api_key, model_name="llama-3.1-8b-instant", temperature=0.3)
+        prompt = ChatPromptTemplate.from_template(
+            """You are a helpful Python tutor.
+            Use only the context below.
+            Answer in your own words.
+            Be clear and friendly.
+            Context: {context}
+            Question: {question}
+            Answer:"""
+        )
+        retriever = vector_store.as_retriever(search_kwargs={"k": 4})
+        st.session_state.chain = (
+            {"context": retriever, "question": RunnablePassthrough()}
+            | prompt
+            | llm
+            | StrOutputParser()
+        )
+        st.success("Documents loaded — ready!")
     else:
-        st.info("Ready for general Python questions")
+        st.info("No documents loaded — general Python help available.")
 
-# Display chat history
+# Chat interface
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Chat input
 if prompt := st.chat_input("Ask anything..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -129,18 +98,16 @@ if prompt := st.chat_input("Ask anything..."):
 
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            try:
-                if st.session_state.chain:
-                    response = st.session_state.chain.invoke(prompt)
-                else:
-                    response = "I can help with general Python questions!"
-            except Exception as e:
-                response = f"Error: {e}"
+            if st.session_state.chain:
+                response = st.session_state.chain.invoke(prompt)
+            else:
+                response = "I can help with general Python questions!"
         st.markdown(response)
     st.session_state.messages.append({"role": "assistant", "content": response})
 
 st.markdown("---")
 st.caption("Azundow Intelligent Document Chatbot — Fast • Professional")
+
 
 
 
