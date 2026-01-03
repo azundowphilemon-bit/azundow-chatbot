@@ -2,7 +2,7 @@ import streamlit as st
 import os
 from dotenv import load_dotenv
 
-# Fix sqlite3 issue on Streamlit Cloud (keep this — it's important!)
+# Critical fix for Streamlit Cloud sqlite3
 try:
     import pysqlite3 as sqlite3
     import sys
@@ -11,6 +11,7 @@ except ImportError:
     pass
 
 import chromadb
+from chromadb.config import Settings
 from langchain_community.document_loaders import PyPDFLoader, CSVLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
@@ -52,7 +53,7 @@ if "chain" not in st.session_state:
 if "docs_loaded" not in st.session_state:
     st.session_state.docs_loaded = False
 
-# Database folder — we keep it safe forever
+# Safe folder for the knowledge base
 persist_dir = "./chroma_db"
 os.makedirs(persist_dir, exist_ok=True)
 
@@ -87,89 +88,40 @@ def build_rag_chain(_api_key):
         model_kwargs={"device": "cpu"}
     )
 
-    # THIS IS THE PERMANENT FIX: Proper client with tenant & database
+    # === PERMANENT FIX FOR NEW CHROMA (2026) ===
+    settings = Settings(anonymized_telemetry=False)
+
+    # Create tenant and database if they don't exist (only runs once)
+    admin_client = chromadb.AdminClient(settings=settings)
+    try:
+        admin_client.create_tenant(name="default_tenant")
+    except:
+        pass  # already exists
+    try:
+        admin_client.create_database(name="default_database", tenant="default_tenant")
+    except:
+        pass  # already exists
+
+    # Normal persistent client
     chroma_client = chromadb.PersistentClient(
         path=persist_dir,
-        tenant="default_tenant",       # Shows the correct pass
-        database="default_database"    # Names the correct room
+        settings=settings,
+        tenant="default_tenant",
+        database="default_database"
     )
+    # === END OF FIX ===
 
-    # Create or connect to collection
+    # Connect to collection
     vector_store = Chroma(
         client=chroma_client,
         collection_name="azundow_collection",
         embedding_function=embeddings,
     )
 
-    # Only add documents if collection is empty (first time only)
+    # Index documents only the very first time
     if vector_store._collection.count() == 0:
-        with st.spinner("Indexing your documents... (this happens only once)"):
-            vector_store.add_documents(splits)
+        with st.spinner("Indexing your documents... (this happens only once
 
-    # Build the AI brain
-    llm = ChatGroq(
-        groq_api_key=_api_key,
-        model_name="llama-3.1-8b-instant",
-        temperature=0.3
-    )
-
-    prompt = ChatPromptTemplate.from_template(
-        """You are a friendly and accurate Python tutor.
-        Use only the given context to answer. Be clear and kind.
-
-        Context: {context}
-        Question: {question}
-
-        Answer:"""
-    )
-
-    retriever = vector_store.as_retriever(search_kwargs={"k": 4})
-
-    chain = (
-        {"context": retriever, "question": RunnablePassthrough()}
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
-
-    return chain, "Documents loaded and ready! Ask anything."
-
-# Load the chain once
-if st.session_state.chain is None:
-    chain, status_msg = build_rag_chain(api_key)
-    st.session_state.chain = chain
-    if chain:
-        st.session_state.docs_loaded = True
-        st.success(status_msg)
-    else:
-        st.session_state.docs_loaded = False
-        st.info(status_msg)
-
-# Chat UI
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-if prompt := st.chat_input("Ask about your documents or Python..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-
-    with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            if st.session_state.chain:
-                try:
-                    response = st.session_state.chain.invoke(prompt)
-                except Exception as e:
-                    response = f"Sorry, a small error happened: {str(e)}"
-            else:
-                response = "Happy to help with any Python question! (No documents loaded)"
-        st.markdown(response)
-
-    st.session_state.messages.append({"role": "assistant", "content": response})
-
-st.markdown("---")
-st.caption("Azundow Intelligent Document Chatbot")
 
 
 
