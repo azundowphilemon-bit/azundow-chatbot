@@ -63,7 +63,7 @@ if st.session_state.chain is None:
     if docs:
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         splits = text_splitter.split_documents(docs)
-        # Fix meta tensor error + in-memory Chroma
+        # Fix meta tensor error + in-memory Chroma (no SQLite/tenant issues)
         embeddings = HuggingFaceEmbeddings(
             model_name="all-MiniLM-L6-v2",
             model_kwargs={"device": "cpu"}
@@ -71,7 +71,7 @@ if st.session_state.chain is None:
         vector_store = Chroma(
             collection_name="azundow_collection",
             embedding_function=embeddings,
-            persist_directory=None  # in-memory — no SQLite/tenant errors
+            persist_directory=None  # in-memory only
         )
         vector_store.add_documents(splits)
         llm = ChatGroq(groq_api_key=api_key, model_name="llama-3.1-8b-instant", temperature=0.3)
@@ -119,6 +119,7 @@ if prompt := st.chat_input("Ask anything..."):
 
 st.markdown("---")
 st.caption("Azundow Intelligent Document Chatbot — Fast • Professional")
+
 
 
 
