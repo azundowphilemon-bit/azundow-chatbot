@@ -2,7 +2,7 @@ import streamlit as st
 import os
 from dotenv import load_dotenv
 
-# Critical fix for Streamlit Cloud sqlite3
+# Fix for Streamlit Cloud sqlite3 (keep this!)
 try:
     import pysqlite3 as sqlite3
     import sys
@@ -11,7 +11,6 @@ except ImportError:
     pass
 
 import chromadb
-from chromadb.config import Settings
 from langchain_community.document_loaders import PyPDFLoader, CSVLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
@@ -53,7 +52,7 @@ if "chain" not in st.session_state:
 if "docs_loaded" not in st.session_state:
     st.session_state.docs_loaded = False
 
-# Safe folder for the knowledge base
+# Safe folder
 persist_dir = "./chroma_db"
 os.makedirs(persist_dir, exist_ok=True)
 
@@ -88,28 +87,8 @@ def build_rag_chain(_api_key):
         model_kwargs={"device": "cpu"}
     )
 
-    # === PERMANENT FIX FOR NEW CHROMA (2026) ===
-    settings = Settings(anonymized_telemetry=False)
-
-    # Create tenant and database if they don't exist (only runs once)
-    admin_client = chromadb.AdminClient(settings=settings)
-    try:
-        admin_client.create_tenant(name="default_tenant")
-    except:
-        pass  # already exists
-    try:
-        admin_client.create_database(name="default_database", tenant="default_tenant")
-    except:
-        pass  # already exists
-
-    # Normal persistent client
-    chroma_client = chromadb.PersistentClient(
-        path=persist_dir,
-        settings=settings,
-        tenant="default_tenant",
-        database="default_database"
-    )
-    # === END OF FIX ===
+    # SIMPLE & PERMANENT FIX: Just basic PersistentClient
+    chroma_client = chromadb.PersistentClient(path=persist_dir)
 
     # Connect to collection
     vector_store = Chroma(
@@ -118,9 +97,9 @@ def build_rag_chain(_api_key):
         embedding_function=embeddings,
     )
 
-    # Index documents only the very first time
+    # Index only the first time
     if vector_store._collection.count() == 0:
-        with st.spinner("Indexing your documents... (this happens only once)"):
+        with st.spinner("Indexing your documents... (only once)"):
             vector_store.add_documents(splits)
 
     # Build the AI
@@ -186,7 +165,8 @@ if prompt := st.chat_input("Ask about your documents or Python..."):
     st.session_state.messages.append({"role": "assistant", "content": response})
 
 st.markdown("---")
-st.caption("Azundow Intelligent Document Chatbot")
+st.caption("Azundow Intelligent Document Chatbot ")
+
 
 
 
