@@ -1,16 +1,6 @@
 import streamlit as st
 import os
 from dotenv import load_dotenv
-
-# Fix for Streamlit Cloud sqlite3 (keep this!)
-try:
-    import pysqlite3 as sqlite3
-    import sys
-    sys.modules["sqlite3"] = sqlite3
-except ImportError:
-    pass
-
-import chromadb
 from langchain_community.document_loaders import PyPDFLoader, CSVLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
@@ -20,22 +10,21 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
-# Load secrets
+# Load .env file (local only)
 load_dotenv()
 
+# Get API key — works locally (.env) and online (Streamlit Secrets)
 api_key = os.getenv("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY")
+
 if not api_key:
-    st.error("Groq API key not found. Add it in Secrets (Cloud) or .env (local).")
+    st.error("Groq API key not found.")
+    st.info("Local: add to .env file\nOnline: add in Streamlit Cloud → Settings → Secrets")
     st.stop()
 
-# Page setup
-st.set_page_config(
-    page_title="Azundow Intelligent Document Chatbot",
-    page_icon="🤖",
-    layout="centered"
-)
+# Page config — MUST BE FIRST
+st.set_page_config(page_title="Azundow Intelligent Document Chatbot", page_icon="🤖", layout="centered")
 
-# Header
+# Title with logo
 col1, col2 = st.columns([1, 5])
 with col1:
     st.image("logo.png", width=100)
@@ -49,104 +38,69 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 if "chain" not in st.session_state:
     st.session_state.chain = None
-if "docs_loaded" not in st.session_state:
-    st.session_state.docs_loaded = False
 
-# Safe folder
-persist_dir = "./chroma_db"
-os.makedirs(persist_dir, exist_ok=True)
-
-@st.cache_resource(show_spinner="Loading documents and building knowledge base...")
-def build_rag_chain(_api_key):
+# Load documents and build RAG chain
+if st.session_state.chain is None:
     documents_folder = "documents"
     docs = []
 
-    # Load PDFs and CSVs
     if os.path.exists(documents_folder):
         files = [f for f in os.listdir(documents_folder) if f.lower().endswith(('.pdf', '.csv'))]
-        if not files:
-            return None, "No documents found → general Python chat mode"
-        for filename in files:
-            file_path = os.path.join(documents_folder, filename)
-            ext = filename.lower().split(".")[-1]
-            loader = PyPDFLoader(file_path) if ext == "pdf" else CSVLoader(file_path)
-            docs.extend(loader.load())
+        if files:
+            for filename in files:
+                file_path = os.path.join(documents_folder, filename)
+                ext = filename.lower().split(".")[-1]
+                if ext == "pdf":
+                    loader = PyPDFLoader(file_path)
+                elif ext == "csv":
+                    loader = CSVLoader(file_path)
+                docs.extend(loader.load())
+        else:
+            st.info("No documents found in 'documents' folder — general chat mode")
     else:
-        return None, "No 'documents' folder → general Python help mode"
+        st.info("No 'documents' folder found — general chat mode")
 
-    if not docs:
-        return None, "No content loaded → general mode"
-
-    # Split into chunks
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    splits = text_splitter.split_documents(docs)
-
-    # Embeddings
-    embeddings = HuggingFaceEmbeddings(
-        model_name="all-MiniLM-L6-v2",
-        model_kwargs={"device": "cpu"}
-    )
-
-    # SIMPLE & PERMANENT FIX: Just basic PersistentClient
-    chroma_client = chromadb.PersistentClient(path=persist_dir)
-
-    # Connect to collection
-    vector_store = Chroma(
-        client=chroma_client,
-        collection_name="azundow_collection",
-        embedding_function=embeddings,
-    )
-
-    # Index only the first time
-    if vector_store._collection.count() == 0:
-        with st.spinner("Indexing your documents... (only once)"):
-            vector_store.add_documents(splits)
-
-    # Build the AI
-    llm = ChatGroq(
-        groq_api_key=_api_key,
-        model_name="llama-3.1-8b-instant",
-        temperature=0.3
-    )
-
-    prompt = ChatPromptTemplate.from_template(
-        """You are a friendly and accurate Python tutor.
-        Use only the given context to answer. Be clear and kind.
-
-        Context: {context}
-        Question: {question}
-
-        Answer:"""
-    )
-
-    retriever = vector_store.as_retriever(search_kwargs={"k": 4})
-
-    chain = (
-        {"context": retriever, "question": RunnablePassthrough()}
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
-
-    return chain, "Documents loaded and ready! Ask anything."
-
-# Load chain once
-if st.session_state.chain is None:
-    chain, status_msg = build_rag_chain(api_key)
-    st.session_state.chain = chain
-    if chain:
-        st.session_state.docs_loaded = True
-        st.success(status_msg)
+    if docs:
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+        splits = text_splitter.split_documents(docs)
+        # Fix meta tensor error + in-memory Chroma
+        embeddings = HuggingFaceEmbeddings(
+            model_name="all-MiniLM-L6-v2",
+            model_kwargs={"device": "cpu"}
+        )
+        vector_store = Chroma(
+            collection_name="azundow_collection",
+            embedding_function=embeddings,
+            persist_directory=None  # in-memory — no SQLite/tenant errors
+        )
+        vector_store.add_documents(splits)
+        llm = ChatGroq(groq_api_key=api_key, model_name="llama-3.1-8b-instant", temperature=0.3)
+        prompt = ChatPromptTemplate.from_template(
+            """You are a helpful Python tutor.
+            Use only the context below.
+            Answer in your own words.
+            Be clear and friendly.
+            Context: {context}
+            Question: {question}
+            Answer:"""
+        )
+        retriever = vector_store.as_retriever(search_kwargs={"k": 4})
+        st.session_state.chain = (
+            {"context": retriever, "question": RunnablePassthrough()}
+            | prompt
+            | llm
+            | StrOutputParser()
+        )
+        st.success("Documents loaded — ready!")
     else:
-        st.session_state.docs_loaded = False
-        st.info(status_msg)
+        st.info("No documents loaded — general Python help available")
 
 # Chat interface
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("Ask about your documents or Python..."):
+if prompt := st.chat_input("Ask anything..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -157,15 +111,15 @@ if prompt := st.chat_input("Ask about your documents or Python..."):
                 try:
                     response = st.session_state.chain.invoke(prompt)
                 except Exception as e:
-                    response = f"Sorry, a small error happened: {str(e)}"
+                    response = f"Sorry, temporary error: {e}"
             else:
-                response = "Happy to help with any Python question! (No documents loaded)"
+                response = "I can help with general Python questions!"
         st.markdown(response)
-
     st.session_state.messages.append({"role": "assistant", "content": response})
 
 st.markdown("---")
-st.caption("Azundow Intelligent Document Chatbot ")
+st.caption("Azundow Intelligent Document Chatbot — Fast • Professional")
+
 
 
 
