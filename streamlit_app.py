@@ -7,30 +7,24 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_chroma import Chroma
 from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
+from langchain.memory import ConversationBufferMemory
+from langchain_core.messages import HumanMessage, AIMessage
 
-# ────────────────────────────────────────────────
-# Load environment variables
-# ────────────────────────────────────────────────
+# Load .env
 load_dotenv()
 
 api_key = os.getenv("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY")
 
 if not api_key:
     st.error("Groq API key not found.")
-    st.info("Local → create .env file\nOnline → add in Streamlit Cloud → Settings → Secrets")
+    st.info("Local: add to .env\nOnline: add in Streamlit Secrets")
     st.stop()
 
-# ────────────────────────────────────────────────
-# Page config — MUST BE FIRST
-# ────────────────────────────────────────────────
-st.set_page_config(
-    page_title="Azundow Intelligent Document Chatbot",
-    page_icon="🤖",
-    layout="centered"
-)
+# Page config
+st.set_page_config(page_title="Azundow Intelligent Document Chatbot", page_icon="🤖", layout="centered")
 
 # Header
 col1, col2 = st.columns([1, 5])
@@ -41,17 +35,18 @@ with col2:
 
 st.caption("Built by Azundow — Ask questions on Python")
 
-# ────────────────────────────────────────────────
-# Session state
-# ────────────────────────────────────────────────
+# Session state for messages and memory
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "memory" not in st.session_state:
+    st.session_state.memory = ConversationBufferMemory(
+        memory_key="chat_history",
+        return_messages=True
+    )
 if "chain" not in st.session_state:
     st.session_state.chain = None
 
-# ────────────────────────────────────────────────
-# Build RAG chain (runs once)
-# ────────────────────────────────────────────────
+# Load documents and build chain
 if st.session_state.chain is None:
     docs = []
     folder = "documents"
@@ -94,36 +89,35 @@ if st.session_state.chain is None:
                 temperature=0.3
             )
 
-            # ────────────────────────────────────────────────
-            # UPDATED SYSTEM PROMPT with length limit + code emphasis
-            # ────────────────────────────────────────────────
-            prompt = ChatPromptTemplate.from_template(
-                """You are a helpful Python tutor.
+            # Prompt with memory placeholder
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", """You are a helpful Python tutor.
 Use only the context below.
 Answer in your own words.
-Be clear, friendly and concise — keep responses short and to the point (maximum 250–300 words unless the question explicitly asks for a detailed explanation).
-Always try to include one or more short, practical Python code examples when it helps explain the concept or answers the question.
-Context: {context}
-Question: {question}
-Answer:"""
-            )
+Be clear, friendly and concise — keep responses short and to the point (maximum 250–300 words unless asked for detail).
+Always try to include one or more short, practical Python code examples when helpful.
+Context: {context}"""),
+                MessagesPlaceholder(variable_name="chat_history"),
+                ("human", "{question}")
+            ])
 
             retriever = vector_store.as_retriever(search_kwargs={"k": 4})
 
-            st.session_state.chain = (
-                {"context": retriever, "question": RunnablePassthrough()}
+            # Chain with memory
+            chain = (
+                {"context": retriever, "question": RunnablePassthrough(), "chat_history": st.session_state.memory.chat_memory}
                 | prompt
                 | llm
                 | StrOutputParser()
             )
 
+            st.session_state.chain = chain
+
         st.success("Documents loaded — ready!")
     else:
         st.info("No documents loaded — general Python help available")
 
-# ────────────────────────────────────────────────
 # Chat interface
-# ────────────────────────────────────────────────
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
@@ -137,7 +131,11 @@ if prompt := st.chat_input("Ask anything..."):
         with st.spinner("Thinking…"):
             if st.session_state.chain:
                 try:
+                    # Invoke with memory
                     response = st.session_state.chain.invoke(prompt)
+                    # Save to memory
+                    st.session_state.memory.chat_memory.add_user_message(prompt)
+                    st.session_state.memory.chat_memory.add_ai_message(response)
                 except Exception as e:
                     response = f"Sorry — temporary error: {e}"
             else:
@@ -149,6 +147,7 @@ if prompt := st.chat_input("Ask anything..."):
 # Footer
 st.markdown("---")
 st.caption("Azundow Intelligent Document Chatbot — Fast • Professional")
+
 
 
 
