@@ -78,10 +78,9 @@ if st.session_state.chain is None:
 
             embeddings = HuggingFaceEmbeddings(
                 model_name="all-MiniLM-L6-v2",
-                model_kwargs={"device": "cpu"}  # no meta tensor error
+                model_kwargs={"device": "cpu"}
             )
 
-            # In-memory Chroma — no SQLite / tenant issues
             vector_store = Chroma(
                 collection_name="azundow_collection",
                 embedding_function=embeddings,
@@ -95,6 +94,9 @@ if st.session_state.chain is None:
                 temperature=0.3
             )
 
+            # ────────────────────────────────────────────────
+            # UPDATED SYSTEM PROMPT with length limit + code emphasis
+            # ────────────────────────────────────────────────
             prompt = ChatPromptTemplate.from_template(
                 """You are a helpful Python tutor.
 Use only the context below.
@@ -147,6 +149,7 @@ if prompt := st.chat_input("Ask anything..."):
 # Footer
 st.markdown("---")
 st.caption("Azundow Intelligent Document Chatbot — Fast • Professional")
+
 
 
 
