@@ -12,16 +12,15 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
 # ────────────────────────────────────────────────
-# Load environment variables (local only)
+# Load environment variables
 # ────────────────────────────────────────────────
 load_dotenv()
 
-# Get API key — works locally (.env) or online (Streamlit Secrets)
 api_key = os.getenv("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY")
 
 if not api_key:
     st.error("Groq API key not found.")
-    st.info("Local: add to .env file\nOnline: add in Streamlit Cloud → Settings → Secrets")
+    st.info("Local → create .env file\nOnline → add in Streamlit Cloud → Settings → Secrets")
     st.stop()
 
 # ────────────────────────────────────────────────
@@ -33,7 +32,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# Title with logo
+# Header
 col1, col2 = st.columns([1, 5])
 with col1:
     st.image("logo.png", width=100)
@@ -51,45 +50,42 @@ if "chain" not in st.session_state:
     st.session_state.chain = None
 
 # ────────────────────────────────────────────────
-# Load documents and build RAG chain (once)
+# Build RAG chain (runs once)
 # ────────────────────────────────────────────────
 if st.session_state.chain is None:
-    documents_folder = "documents"
     docs = []
+    folder = "documents"
 
-    if os.path.exists(documents_folder):
-        files = [f for f in os.listdir(documents_folder) if f.lower().endswith(('.pdf', '.csv'))]
+    if os.path.exists(folder):
+        files = [f for f in os.listdir(folder) if f.lower().endswith(('.pdf', '.csv'))]
         if files:
-            for filename in files:
-                file_path = os.path.join(documents_folder, filename)
-                ext = filename.lower().split(".")[-1]
+            for f in files:
+                path = os.path.join(folder, f)
                 try:
-                    if ext == "pdf":
-                        loader = PyPDFLoader(file_path)
-                    elif ext == "csv":
-                        loader = CSVLoader(file_path)
+                    loader = PyPDFLoader(path) if f.lower().endswith(".pdf") else CSVLoader(path)
                     docs.extend(loader.load())
                 except Exception as e:
-                    st.warning(f"Could not load {filename}: {e}")
+                    st.warning(f"Could not load {f}: {e}")
         else:
-            st.info("No documents found in 'documents' folder — general chat mode")
+            st.info("No documents in 'documents' folder → general mode")
     else:
-        st.info("No 'documents' folder found — general chat mode")
+        st.info("No 'documents' folder → general mode")
 
     if docs:
-        with st.spinner("Building knowledge base..."):
-            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-            splits = text_splitter.split_documents(docs)
+        with st.spinner("Building knowledge base…"):
+            splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+            splits = splitter.split_documents(docs)
 
             embeddings = HuggingFaceEmbeddings(
                 model_name="all-MiniLM-L6-v2",
-                model_kwargs={"device": "cpu"}  # avoids meta tensor errors
+                model_kwargs={"device": "cpu"}  # no meta tensor error
             )
 
+            # In-memory Chroma — no SQLite / tenant issues
             vector_store = Chroma(
                 collection_name="azundow_collection",
                 embedding_function=embeddings,
-                persist_directory=None  # in-memory only — safe on Streamlit Cloud
+                persist_directory=None
             )
             vector_store.add_documents(splits)
 
@@ -101,13 +97,13 @@ if st.session_state.chain is None:
 
             prompt = ChatPromptTemplate.from_template(
                 """You are a helpful Python tutor.
-                Use only the context below.
-                Answer in your own words.
-                Be clear, friendly and concise — keep responses short and to the point (maximum 250–300 words unless the question explicitly asks for a detailed explanation).
-                Always try to include one or more short, practical Python code examples when it helps explain the concept or answers the question.
-                Context: {context}
-                Question: {question}
-                Answer:"""
+Use only the context below.
+Answer in your own words.
+Be clear, friendly and concise — keep responses short and to the point (maximum 250–300 words unless the question explicitly asks for a detailed explanation).
+Always try to include one or more short, practical Python code examples when it helps explain the concept or answers the question.
+Context: {context}
+Question: {question}
+Answer:"""
             )
 
             retriever = vector_store.as_retriever(search_kwargs={"k": 4})
@@ -126,9 +122,9 @@ if st.session_state.chain is None:
 # ────────────────────────────────────────────────
 # Chat interface
 # ────────────────────────────────────────────────
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
 if prompt := st.chat_input("Ask anything..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -136,12 +132,12 @@ if prompt := st.chat_input("Ask anything..."):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
+        with st.spinner("Thinking…"):
             if st.session_state.chain:
                 try:
                     response = st.session_state.chain.invoke(prompt)
                 except Exception as e:
-                    response = f"Sorry, temporary error: {e}"
+                    response = f"Sorry — temporary error: {e}"
             else:
                 response = "I can help with general Python questions!"
         st.markdown(response)
@@ -151,6 +147,7 @@ if prompt := st.chat_input("Ask anything..."):
 # Footer
 st.markdown("---")
 st.caption("Azundow Intelligent Document Chatbot — Fast • Professional")
+
 
 
 
