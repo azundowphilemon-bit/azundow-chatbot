@@ -47,8 +47,18 @@ if "messages" not in st.session_state:
 if "chain" not in st.session_state:
     st.session_state.chain = None
 
+import importlib
+try:
+    importlib.reload(topics)
+except:
+    pass
+
 # Get Topics
 ALL_TOPICS = topics.get_topics()
+
+# ────────────────────────────────────────────────
+# Application Flow
+# ────────────────────────────────────────────────
 
 # ────────────────────────────────────────────────
 # Application Flow
@@ -68,7 +78,7 @@ if not st.session_state.logged_in:
     
     st.info("Please Login or Register to continue your Python learning journey.")
 
-    tab1, tab2 = st.tabs(["Login", "Register"])
+    tab1, tab2, tab3 = st.tabs(["Login", "Register", "Forgot Password"])
 
     with tab1:
         with st.form("login_form"):
@@ -94,6 +104,7 @@ if not st.session_state.logged_in:
     with tab2:
         with st.form("register_form"):
             new_user = st.text_input("Username")
+            new_email = st.text_input("Email")
             new_name = st.text_input("Full Name")
             new_password = st.text_input("Password", type="password")
             confirm_password = st.text_input("Confirm Password", type="password")
@@ -105,10 +116,24 @@ if not st.session_state.logged_in:
                 elif len(new_password) < 4:
                     st.error("Password must be at least 4 characters.")
                 else:
-                    if auth.register_user(new_user, new_password, new_name):
+                    if auth.register_user(new_user, new_password, new_name, new_email):
                         st.success("Registration successful! Please login.")
                     else:
                         st.error("Username already exists.")
+
+    with tab3:
+        st.write("Reset your password if you forgot it.")
+        with st.form("forgot_password_form"):
+            reset_user = st.text_input("Username")
+            reset_email = st.text_input("Email")
+            new_reset_pass = st.text_input("New Password", type="password")
+            submit_reset = st.form_submit_button("Reset Password")
+            
+            if submit_reset:
+                if auth.reset_password(reset_user, reset_email, new_reset_pass):
+                    st.success("Password reset successful! You can now login.")
+                else:
+                    st.error("Username and Email do not match our records.")
 
     st.stop()  # Stop execution here if not logged in
 
@@ -130,6 +155,10 @@ with st.sidebar:
     st.write(f"👤 **{st.session_state.user_name}**")
     st.write(f"📚 **Current Topic:** {current_topic_name}")
     st.progress(min(1.0, (st.session_state.current_topic_index + 1) / len(ALL_TOPICS)))
+
+    # DEBUG: Show loaded topics
+    with st.expander("Debug: Topic List"):
+        st.write(ALL_TOPICS)
     
     if st.button("Mark Topic as Complete & Next"):
         new_index = st.session_state.current_topic_index + 1
@@ -237,21 +266,31 @@ if st.session_state.chain is None:
     )
 
     # ────────────────────────────────────────────────
-    # UPDATED SYSTEM PROMPT (Personalized + Proactive Progress)
+    # UPDATED SYSTEM PROMPT (Strict Tutor + Help Me Pass)
     # ────────────────────────────────────────────────
     prompt = ChatPromptTemplate.from_template(
-        f"""You are Azundow, a helpful and patient Python tutor.
+        f"""You are Azundow, a patient and simple-speaking Python Tutor for beginners.
 The user's name is {st.session_state.user_name}.
-The user is currently learning the topic: "{current_topic_name}".
-The NEXT topic is: "{next_topic_name}".
+Current Topic: "{current_topic_name}".
+Next Topic: "{next_topic_name}".
 
-YOUR INSTRUCTIONS:
-1. Explain the main concept of "{current_topic_name}" clearly.
-2. Provide a short, practical Python code example for "{current_topic_name}".
-3. CRITICAL: Do NOT wait for the user to ask for the next topic.
-4. Once you have provided the explanation and example, IMMEDIATEY ask: "That covers {current_topic_name}. The next topic is {next_topic_name}. Shall we proceed?"
-5. Use only the context below if available.
-6. Answer in your own words.
+PHASES OF TUTORING:
+1. EXPLAIN: Teach the concept simply using metaphors.
+2. EXERCISE: Give ONE simple coding exercise. Wait for the user's answer.
+3. FEEDBACK: Correct the user. If wrong, explain why.
+4. SUPPORT: If the user fails multiple times or is stuck, ask: "Should I help you pass to the next topic?"
+5. APPROVAL & LOOP PREVENTION: 
+   - IF the user passes the exercise OR says "yes" to "help pass":
+     - Explain the solution simply.
+     - You MUST say: "You have finished {current_topic_name}! Please click the **Mark Topic as Complete** button in the sidebar to unlock {next_topic_name}."
+     - Do NOT ask "Shall we proceed?". The user CANNOT proceed by saying "yes". They MUST click the button.
+
+CONSTRAINTS:
+- Do NOT dump all information at once.
+- Do NOT move to the next topic unless the user passes the exercise or explicitly asks for help to pass.
+- Keep language very simple (EL5).
+- Do NOT say "Hello {st.session_state.user_name}" in every message.
+- If the user says "next" or "continue", remind them: "I cannot move you to the next topic. You must click the **Mark Topic as Complete** button in the sidebar."
 
 Context: {{context}}
 Question: {{question}}

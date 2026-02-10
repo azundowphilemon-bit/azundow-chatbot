@@ -1,6 +1,6 @@
 import re
 
-TUTORIAL_FILE = "documents/w3schools_python.md"
+TUTORIAL_FILE = "documents/python_curriculum.md"
 
 def get_topics():
     """Parses the tutorial file to return a list of topics (H1 headers)."""

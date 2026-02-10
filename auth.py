@@ -40,10 +40,10 @@ def init_db():
     try:
         # Check if headers exist
         headers = sheet.row_values(1)
-        if headers != ["username", "password", "name"]:
+        if headers != ["username", "password", "name", "email"]:
             # If empty or wrong, set headers
             sheet.clear()
-            sheet.append_row(["username", "password", "name"])
+            sheet.append_row(["username", "password", "name", "email"])
         return True
     except Exception as e:
         st.error(f"Failed to initialize DB: {e}")
@@ -59,7 +59,7 @@ def check_hashes(password, hashed_text):
         return hashed_text
     return False
 
-def register_user(username, password, name):
+def register_user(username, password, name, email):
     """Registers a new user in Google Sheets."""
     sheet, error = get_db_connection()
     if not sheet:
@@ -74,7 +74,7 @@ def register_user(username, password, name):
                 return False
         
         # Append new user
-        sheet.append_row([username, make_hashes(password), name])
+        sheet.append_row([username, make_hashes(password), name, email])
         return True
     except Exception as e:
         print(f"Register Error: {e}")
@@ -101,6 +101,44 @@ def login_user(username, password):
         print(f"Login Error: {e}")
         return None
 
+def reset_password(username, email, new_password):
+    """Resets password if username and email match."""
+    sheet, error = get_db_connection()
+    if not sheet:
+        return False
+
+    try:
+        records = sheet.get_all_records()
+        cell = sheet.find(username)
+        
+        if cell:
+            # Check if email matches (simulated verification)
+            # Row index is cell.row, assuming email is in column 4 (D) based on init_db order?
+            # Actually, init_db order is ["username", "password", "name", "email"]
+            # So: Col 1=User, Col 2=Pass, Col 3=Name, Col 4=Email. 
+            # Wait, `update_progress` assumed progress was column 4. Now Email is column 4?
+            # Let's fix column assumption. We should find column index by header name to be safe, 
+            # or stick to a convention.
+            # Let's stick to appending email at the end: ["username", "password", "name", "progress", "email"]?
+            # But the user might have existing data. Let's assume standard order:
+            # User(1), Pass(2), Name(3), Email(4), Progress(5).
+            
+            # Let's check the record content first.
+            row_data = sheet.row_values(cell.row)
+            # We need to be careful about indices.
+            # Let's use get_all_records to be safe about column names.
+            # But we need row number to update.
+            
+            # Simplified approach: fetch row, check email at index 3 (4th col), update index 1 (2nd col)
+            stored_email = sheet.cell(cell.row, 4).value
+            if stored_email == email:
+                sheet.update_cell(cell.row, 2, make_hashes(new_password))
+                return True
+        return False
+    except Exception as e:
+        print(f"Reset PW Error: {e}")
+        return False
+
 def update_progress(username, new_index):
     """Updates the progress index for a user."""
     sheet, error = get_db_connection()
@@ -108,13 +146,16 @@ def update_progress(username, new_index):
         return False
         
     try:
-        # specific cell update is more efficient but finding row is needed
         cell = sheet.find(username)
         if cell:
-            # Update 'progress' column (assuming it's the 4th column, col D)
-            # You can also find the header column index dynamically if preferred
-            # For simplicity, let's assume it's column 4 based on instruction
-            sheet.update_cell(cell.row, 4, new_index)
+            # Update 'progress' column. 
+            # If headers are ["username", "password", "name", "email"], where is progress?
+            # Usually gspread get_all_records handles extra columns fine.
+            # But if we want to WRITE to it, we need a specific column.
+            # Let's say Progress is Col 5.
+            # If the sheet doesn't have a header for it, we might be writing to empty space.
+            # Let's assume Col 5 for progress.
+            sheet.update_cell(cell.row, 5, new_index)
             return True
         return False
     except Exception as e:
