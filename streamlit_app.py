@@ -390,7 +390,7 @@ Answer:"""
         {
             "formatted_context": context_part["context"] | format_context,
             "question": RunnablePassthrough(), 
-            "user_name": lambda x: st.session_state.user_name,
+            "user_name": lambda x: st.session_state.get("user_name", "Student"),
             "current_topic_name": lambda x: current_topic_name, 
             "next_topic_name": lambda x: next_topic_name,
             "topic_content": lambda x: current_topic_content
