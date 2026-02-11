@@ -30,6 +30,77 @@ st.set_page_config(
 )
 
 # ────────────────────────────────────────────────
+# 🎨 CUSTOM CSS FOR PROFESSIONAL UI
+# ────────────────────────────────────────────────
+st.markdown("""
+<style>
+    /* Hide Streamlit Branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+
+    /* Global Font & Clean Background */
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    /* Chat Bubbles - iOS Style */
+    .stChatMessage {
+        padding: 1rem;
+        border-radius: 12px;
+        margin-bottom: 0.5rem;
+    }
+    
+    /* User Message (Blue) */
+    div[data-testid="stChatMessage"]:nth-child(even) {
+        background-color: #007AFF15; /* Light Blue Tint */
+        border: 1px solid #007AFF30;
+    }
+
+    /* Assistant Message (Gray) */
+    div[data-testid="stChatMessage"]:nth-child(odd) {
+        background-color: #F2F2F7;
+        border: 1px solid #E5E5EA;
+    }
+
+    /* Input Box Styling */
+    .stTextInput > div > div > input {
+        border-radius: 10px;
+        border: 1px solid #E5E5EA;
+    }
+    .stChatInput > div > div > textarea {
+        border-radius: 12px;
+        border: 1px solid #E5E5EA;
+    }
+
+    /* Sidebar Clean-up */
+    section[data-testid="stSidebar"] {
+        background-color: #F9F9FB;
+        border-right: 1px solid #EAEAEA;
+    }
+
+    /* Progress Bar */
+    .stProgress > div > div > div > div {
+        background-color: #007AFF;
+    }
+    
+    /* Button Styling */
+    div.stButton > button {
+        border-radius: 8px;
+        font-weight: 500;
+        border: none;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        transition: all 0.2s;
+    }
+    div.stButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+</style>
+""", unsafe_allow_html=True)
+
+# ────────────────────────────────────────────────
 # Auth & Session State Initialization
 # ────────────────────────────────────────────────
 if "logged_in" not in st.session_state:
@@ -76,9 +147,13 @@ if not st.session_state.logged_in:
     with col2:
         st.markdown("<h2 style='margin-top: 20px;'>Welcome to Azundow Intelligent Chatbot</h2>", unsafe_allow_html=True)
     
-    st.info("Please Login or Register to continue your Python learning journey.")
+    st.markdown("<br><br>", unsafe_allow_html=True) # Spacer
 
-    tab1, tab2, tab3 = st.tabs(["Login", "Register", "Forgot Password"])
+    # Centered Login Card
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.info("Please Login or Register to continue.")
+        tab1, tab2, tab3 = st.tabs(["Login", "Register", "Forgot Password"])
 
     with tab1:
         with st.form("login_form"):
@@ -266,49 +341,60 @@ if st.session_state.chain is None:
     )
 
     # ────────────────────────────────────────────────
-    # UPDATED SYSTEM PROMPT (Strict Tutor + Help Me Pass)
     # ────────────────────────────────────────────────
-    # UPDATED SYSTEM PROMPT (Strict Tutor + Help Me Pass)
+    # UPDATED SYSTEM PROMPT (Strict Tutor + Professional + NO RAG)
     # ────────────────────────────────────────────────
-    # UPDATED SYSTEM PROMPT (Strict Tutor + Help Me Pass)
-    # ────────────────────────────────────────────────
+    
+    # Get the exact content for the current topic to force adherence
+    current_topic_content = topics.get_topic_content(current_topic_name)
+
+    # We REMOVE {{context}} to prevent "general knowledge" leaks.
+    # The bot must ONLY use {{topic_content}}.
+    
     prompt = ChatPromptTemplate.from_template(
-        f"""You are Azundow, a patient and simple-speaking Python Tutor for beginners.
-The user's name is {st.session_state.user_name}.
-Current Topic: "{current_topic_name}".
-Next Topic: "{next_topic_name}".
+        f"""You are Azundow, a professional Python Tutor.
+Your student is {{user_name}}.
+Topic: {{current_topic_name}}
+Next Topic: {{next_topic_name}}
 
-PHASES OF TUTORING:
-1. EXPLAIN: 
-   - IF the user says "yes", "explain", "start", or asks about "{current_topic_name}" -> Teach the concept simply using metaphors.
-2. EXERCISE: 
-   - Immediately after explaining, give ONE simple coding exercise. Wait for the user's answer.
-3. FEEDBACK: 
-   - Correct the user. If wrong, explain why.
-4. SUPPORT (FAILSAFE): 
-   - IF the user fails multiple times OR asks for help OR says "answer it" OR says "write it yourself":
-     - 1. Say: "The correct answer is: [solution]"
-     - 2. IMMEDIATELY SAY: "You have finished {current_topic_name}! Please click the **Mark Topic as Complete** button in the sidebar to unlock {next_topic_name}."
-5. APPROVAL: 
-   - IF the user passes the exercise:
-     - 1. Clarity: "Correct! [Explanation]"
-     - 2. Mandatory Instruction: "You have finished {current_topic_name}! Please click the **Mark Topic as Complete** button in the sidebar to unlock {next_topic_name}."
-     - Do NOT ask "Shall we proceed?". The user CANNOT proceed by saying "yes". They MUST click the button.
+### STRICT INSTRUCTION:
+Your "brain" is ONLY the content below. If it is not written below, you do NOT know it.
+Do NOT use metaphors like "boxes", "snacks", "containers" unless they are in the text below.
+Do NOT give extra examples unless they are in the text below.
 
-CONSTRAINTS:
-- Do NOT move to the next topic unless the user passes the exercise or explicitly asks for the answer.
-- Keep language very simple (EL5).
-- Do NOT say "Hello {st.session_state.user_name}" in every message.
-- If the user says "next" or "proceed" BEFORE passing, say: "Let's finish {current_topic_name} first."
-- If the user says "next" or "proceed" AFTER passing, say: "I cannot move you to the next topic. You must click the **Mark Topic as Complete** button in the sidebar."
+=== LESSON CONTENT (Your ONLY Knowledge) ===
+{{topic_content}}
+============================================
 
-Context: {{context}}
+### PROTOCOL:
+1. **EXPLAIN**: If asked to explain/start, output the "Explanation" and "Example" sections from the text above verbatim or slightly summarized. Do NOT add your own analogies.
+2. **EXERCISE**: Then, give the "Exercise" from the text above.
+3. **VERIFY**: Check the user's answer against the exercise solution.
+   - CORRECT: Say "Correct." then IMMEDIATELY say: "You have finished {{current_topic_name}}! Please click the **Mark Topic as Complete** button."
+   - INCORRECT: unexpected answer? Quote the lesson text to correct them.
+   - STUCK?: Give the answer code. Then say "Please click the **Mark Topic as Complete** button."
+
+Context: {{formatted_context}}
 Question: {{question}}
 Answer:"""
     )
+    
+    # We pass an empty string for context if we want to be 100% strict, 
+    # OR we use the doc search only if absolutely necessary (e.g. they ask about a previous topic).
+    # For now, let's keep the retriever but instruct the model to prioritize the LESSON CONTENT.
+    
+    def format_context(docs):
+        return "\\n\\n".join([d.page_content for d in docs])
 
     st.session_state.chain = (
-        context_part
+        {{
+            "formatted_context": context_part["context"] | format_context,
+            "question": RunnablePassthrough(), 
+            "user_name": lambda x: st.session_state.user_name,
+            "current_topic_name": lambda x: current_topic_name, 
+            "next_topic_name": lambda x: next_topic_name,
+            "topic_content": lambda x: current_topic_content
+        }}
         | prompt
         | llm
         | StrOutputParser()
