@@ -415,12 +415,12 @@ Assistant:"""
     st.session_state.chain = (
         {
             "formatted_context": context_part["context"] | format_context,
-            "question": RunnablePassthrough(), 
+            "question": lambda x: x["question"], 
             "user_name": lambda x: st.session_state.get("user_name", "Student"),
             "current_topic_name": lambda x: current_topic_name, 
             "next_topic_name": lambda x: next_topic_name,
             "topic_content": lambda x: current_topic_content,
-            "history": lambda x: "\\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages[-10:]])
+            "history": lambda x: x["history"]
         }
         | prompt
         | llm
@@ -444,7 +444,13 @@ if prompt := st.chat_input("Ask about Python..."):
         with st.spinner("Thinking…"):
             if st.session_state.chain:
                 try:
-                    response = st.session_state.chain.invoke(prompt)
+                    # Format history safely
+                    history_text = "\\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages[-10:]])
+                    
+                    response = st.session_state.chain.invoke({
+                        "question": prompt,
+                        "history": history_text
+                    })
                 except Exception as e:
                     response = f"Sorry — temporary error: {e}"
             else:
