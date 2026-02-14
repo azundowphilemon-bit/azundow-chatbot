@@ -324,7 +324,8 @@ if st.session_state.chain is None:
                     st.warning(f"Could not load {f}: {e}")
 
     # Fallback if no docs
-    context_part = {"context": lambda x: "No documents.", "question": RunnablePassthrough()}
+    from langchain_core.documents import Document
+    context_part = {"context": lambda x: [Document(page_content="No documents found.")], "question": RunnablePassthrough()}
     
     if docs:
         with st.spinner("Building knowledge base…"):
@@ -414,7 +415,7 @@ Assistant:"""
 
     st.session_state.chain = (
         {
-            "formatted_context": context_part["context"] | format_context,
+            "formatted_context": (lambda x: x["question"]) | context_part["context"] | format_context,
             "question": lambda x: x["question"], 
             "user_name": lambda x: st.session_state.get("user_name", "Student"),
             "current_topic_name": lambda x: current_topic_name, 
