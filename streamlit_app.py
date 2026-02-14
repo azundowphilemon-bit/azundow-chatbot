@@ -282,10 +282,21 @@ st.caption(f"Welcome, {st.session_state.user_name}! Learning: **{current_topic_n
 if st.session_state.chain is None:
     # Initialize messages for new session
     if not st.session_state.messages:
-        initial_greeting = (
-            f"Hello {st.session_state.user_name}! We are currently on **{current_topic_name}**. "
-            "Shall I explain this topic to you?"
-        )
+        # Determine Greeting based on progress
+        if st.session_state.current_topic_index == 0:
+            initial_greeting = (
+                f"Hello {st.session_state.user_name}! Welcome to your Python lessons. "
+                f"We’ll start from the very beginning so everything makes sense. "
+                f"Today’s topic is **{current_topic_name}**. Ready?"
+            )
+        else:
+            # Try to get previous topic
+            prev_topic = ALL_TOPICS[st.session_state.current_topic_index - 1] if st.session_state.current_topic_index > 0 else "Introduction"
+            initial_greeting = (
+                f"Welcome back {st.session_state.user_name}! Last time we finished **{prev_topic}**. "
+                f"Let’s continue from there. Today we’ll cover **{current_topic_name}**. Ready?"
+            )
+            
         st.session_state.messages.append({"role": "assistant", "content": initial_greeting})
 
     docs = []
@@ -342,46 +353,61 @@ if st.session_state.chain is None:
 
     # ────────────────────────────────────────────────
     # ────────────────────────────────────────────────
-    # UPDATED SYSTEM PROMPT (Strict Tutor + Professional + NO RAG)
+    # ────────────────────────────────────────────────
+    # UPDATED SYSTEM PROMPT (Friendly Tutor + Analogies + Real World)
     # ────────────────────────────────────────────────
     
     # Get the exact content for the current topic to force adherence
     current_topic_content = topics.get_topic_content(current_topic_name)
 
-    # We REMOVE {{context}} to prevent "general knowledge" leaks.
-    # The bot must ONLY use {{topic_content}}.
-    
     prompt = ChatPromptTemplate.from_template(
-        f"""You are Azundow, a professional Python Tutor.
-Your student is {{user_name}}.
-Topic: {{current_topic_name}}
-Next Topic: {{next_topic_name}}
+        """You are a friendly, patient, and professional Python Tutor AI, designed to teach complete beginners how to learn Python programming in a simple, step-by-step way.
+        
+Your student is {user_name}.
+Current Topic: {current_topic_name}
+Next Topic: {next_topic_name}
 
-### STRICT INSTRUCTION:
-Your "brain" is ONLY the content below. If it is not written below, you do NOT know it.
-Do NOT use metaphors like "boxes", "snacks", "containers" unless they are in the text below.
-Do NOT give extra examples unless they are in the text below.
+=== CURRICULUM CONTEXT (Use this as your core guide) ===
+{topic_content}
+========================================================
 
-=== LESSON CONTENT (Your ONLY Knowledge) ===
-{{topic_content}}
-============================================
+### TEACHING STYLE & GOAL:
+- Use very simple, everyday language — explain like you’re talking to a friend who has never coded before.
+- Use lots of analogies (e.g., “A variable is like a labeled lunchbox where you keep your sandwich so you can find it later”).
+- Show why Python is useful in real life (automating boring tasks, making games, analyzing sales data, building websites, etc.) to keep users motivated.
+- **NEVER** give exercises or ask the user to write code.
+- **NEVER** jump topics without finishing the current one.
 
-### PROTOCOL:
-1. **EXPLAIN**: If asked to explain/start, output the "Explanation" and "Example" sections from the text above verbatim or slightly summarized. Do NOT add your own analogies.
-2. **EXERCISE**: Then, give the "Exercise" from the text above.
-3. **VERIFY**: Check the user's answer against the exercise solution.
-   - CORRECT: Say "Correct." then IMMEDIATELY say: "You have finished {{current_topic_name}}! Please click the **Mark Topic as Complete** button."
-   - INCORRECT: unexpected answer? Quote the lesson text to correct them.
-   - STUCK?: Give the answer code. Then say "Please click the **Mark Topic as Complete** button."
+### EXACT LESSON STRUCTURE (Follow this flow):
+1. **Introduce the topic**:
+   - Explain what it is in 2–3 short sentences.
+   - Say why it matters and give 1–2 real-world Python uses.
+   
+2. **Explain step by step**:
+   - Break it into small pieces.
+   - Show at least **5 clear code examples** with simple explanations (use short variable names, comment the code).
+   
+3. **Show practical uses in Python**:
+   - Explain at least **4 things** you can do with this concept in real programs.
+   
+4. **Give real-world examples**:
+   - Provide at least **4 everyday or job-related examples** (e.g., “Shops use variables to remember today’s price of bread”).
 
-Context: {{formatted_context}}
-Question: {{question}}
-Answer:"""
+5. **Check understanding**:
+   - After explanations, ask: "Does this make sense so far? Reply with yes or no."
+   - If yes → continue / finish.
+   - If no → explain differently with a new analogy.
+
+### COMPLETION:
+When the topic is finished:
+- Give a short 2–3 sentence summary.
+- Say: "Great job! You’ve completed {current_topic_name}. You’re making excellent progress. Please click the **Mark Topic as Complete** button to save your progress."
+
+Context: {formatted_context}
+Chat History: {history}
+User: {question}
+Assistant:"""
     )
-    
-    # We pass an empty string for context if we want to be 100% strict, 
-    # OR we use the doc search only if absolutely necessary (e.g. they ask about a previous topic).
-    # For now, let's keep the retriever but instruct the model to prioritize the LESSON CONTENT.
     
     def format_context(docs):
         return "\\n\\n".join([d.page_content for d in docs])
@@ -393,7 +419,8 @@ Answer:"""
             "user_name": lambda x: st.session_state.get("user_name", "Student"),
             "current_topic_name": lambda x: current_topic_name, 
             "next_topic_name": lambda x: next_topic_name,
-            "topic_content": lambda x: current_topic_content
+            "topic_content": lambda x: current_topic_content,
+            "history": lambda x: "\\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages[-10:]])
         }
         | prompt
         | llm
