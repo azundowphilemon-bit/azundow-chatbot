@@ -20,6 +20,9 @@ load_dotenv()
 
 api_key = os.getenv("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY")
 
+# Initialize DB safely
+auth.init_db()
+
 # ────────────────────────────────────────────────
 # Page config — MUST BE FIRST
 # ────────────────────────────────────────────────
@@ -191,24 +194,27 @@ if not st.session_state.logged_in:
                 elif len(new_password) < 4:
                     st.error("Password must be at least 4 characters.")
                 else:
-                    if auth.register_user(new_user, new_password, new_name, new_email):
-                        st.success("Registration successful! Please login.")
+
+                    success, msg = auth.register_user(new_user, new_password, new_name, new_email)
+                    if success:
+                        st.success(msg)
                     else:
-                        st.error("Username already exists.")
+                        st.error(msg)
 
     with tab3:
         st.write("Reset your password if you forgot it.")
         with st.form("forgot_password_form"):
             reset_user = st.text_input("Username")
             reset_email = st.text_input("Email")
-            new_reset_pass = st.text_input("New Password", type="password")
+            # new_reset_pass = st.text_input("New Password", type="password") # Removed
             submit_reset = st.form_submit_button("Reset Password")
             
             if submit_reset:
-                if auth.reset_password(reset_user, reset_email, new_reset_pass):
-                    st.success("Password reset successful! You can now login.")
+                success, msg = auth.reset_password(reset_user, reset_email, None)
+                if success:
+                    st.success(msg)
                 else:
-                    st.error("Username and Email do not match our records.")
+                    st.error(msg)
 
     st.stop()  # Stop execution here if not logged in
 
@@ -250,13 +256,35 @@ with st.sidebar:
             st.success("You have completed the tutorial!")
 
     st.markdown("---")
-    if st.button("Logout"):
+    
+    # LOGOUT
+    if st.button("Logout", key="btn_logout"):
         st.session_state.logged_in = False
         st.session_state.username = None
         st.session_state.user_name = None
-        st.session_state.messages = [] # Clear history on logout
+        st.session_state.messages = [] 
         st.session_state.chain = None
         st.rerun()
+
+    st.markdown("---")
+    
+    # DELETE
+    st.error("Danger Zone")
+    if st.button("DELETE ACCOUNT", type="primary", key="btn_delete"):
+        if st.session_state.username:
+            success, msg = auth.delete_user(st.session_state.username)
+            if success:
+                st.success(msg)
+                st.session_state.logged_in = False
+                st.session_state.username = None
+                st.session_state.user_name = None
+                st.session_state.messages = []
+                st.session_state.chain = None
+                st.rerun()
+            else:
+                st.error(msg)
+        else:
+            st.error("Username invalid (reload page).")
 
 # API Key Check
 if not api_key:
@@ -386,7 +414,8 @@ Next Topic: {next_topic_name}
    
 2. **Explain step by step**:
    - Break it into small pieces.
-   - Show at least **5 clear code examples** with simple explanations (use short variable names, comment the code).
+   - **MANDATORY**: You MUST show at least **5 clear, runnable Python code examples** for every explanation.
+   - Use short variable names and meaningful comments.
    
 3. **Show practical uses in Python**:
    - Explain at least **4 things** you can do with this concept in real programs.
@@ -445,8 +474,9 @@ if prompt := st.chat_input("Ask about Python..."):
         with st.spinner("Thinking…"):
             if st.session_state.chain:
                 try:
-                    # Format history safely
-                    history_text = "\\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.messages[-10:]])
+                    # Format history safely (exclude current user message which is at -1)
+                    history_messages = st.session_state.messages[:-1]
+                    history_text = "\\n".join([f"{m['role']}: {m['content']}" for m in history_messages[-10:]])
                     
                     response = st.session_state.chain.invoke({
                         "question": prompt,
