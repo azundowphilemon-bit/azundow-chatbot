@@ -281,23 +281,7 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # DELETE
-    st.error("Danger Zone")
-    if st.button("DELETE ACCOUNT", type="primary", key="btn_delete"):
-        if st.session_state.username:
-            success, msg = auth.delete_user(st.session_state.username)
-            if success:
-                st.success(msg)
-                st.session_state.logged_in = False
-                st.session_state.username = None
-                st.session_state.user_name = None
-                st.session_state.messages = []
-                st.session_state.chain = None
-                st.rerun()
-            else:
-                st.error(msg)
-        else:
-            st.error("Username invalid (reload page).")
+
 
 # API Key Check
 if not api_key:
