@@ -40,7 +40,6 @@ st.markdown("""
     /* Hide Streamlit Branding */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
 
     /* Global Font & Clean Background */
     html, body, [class*="css"] {
