@@ -29,8 +29,12 @@ auth.init_db()
 st.set_page_config(
     page_title="Azundow Intelligent Document Chatbot",
     page_icon="🤖",
-    layout="centered",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': 'https://github.com/azundowphilemon-bit/azundow-chatbot',
+        'Report a bug': "https://github.com/azundowphilemon-bit/azundow-chatbot/issues",
+        'About': "### Azundow Chatbot\nYour intelligent AI tutor for learning Python."
+    }
 )
 
 # ────────────────────────────────────────────────
