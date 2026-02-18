@@ -39,9 +39,13 @@ st.set_page_config(
 # Force Open Graph Image for WhatsApp/Facebook Preview
 st.markdown("""
 <head>
-<meta property="og:image" content="https://raw.githubusercontent.com/azundowphilemon-bit/azundow-chatbot/main/logo.png" />
-<meta property="og:title" content="Azundow Intelligent Document Chatbot" />
-<meta property="og:description" content="Your intelligent AI tutor for learning Python." />
+    <meta property="og:url" content="https://azundow-chatbot-nuxqnlhk9dqejvrvz8svzp.streamlit.app/">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Azundow Intelligent Document Chatbot">
+    <meta property="og:description" content="Your intelligent AI tutor for learning Python.">
+    <meta property="og:image" content="https://raw.githubusercontent.com/azundowphilemon-bit/azundow-chatbot/main/logo.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://raw.githubusercontent.com/azundowphilemon-bit/azundow-chatbot/main/logo.png">
 </head>
 """, unsafe_allow_html=True)
 
