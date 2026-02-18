@@ -237,14 +237,26 @@ with st.sidebar:
     st.write(f"📚 **Current Topic:** {current_topic_name}")
     st.progress(min(1.0, (st.session_state.current_topic_index + 1) / len(ALL_TOPICS)))
 
-    # DEBUG: Show loaded topics
-    with st.expander("Debug: Topic List"):
-        st.write(ALL_TOPICS)
+    # Course Roadmap
+    st.write("### 🗺️ Course Roadmap")
+    for i, topic in enumerate(ALL_TOPICS):
+        if i < st.session_state.current_topic_index:
+            st.write(f"✅ {topic}")
+        elif i == st.session_state.current_topic_index:
+            st.write(f"📍 **{topic}** (Current)")
+        else:
+            st.write(f"🔒 {topic}")
+
+    st.markdown("---")
     
     if st.button("Mark Topic as Complete & Next"):
         new_index = st.session_state.current_topic_index + 1
         if new_index < len(ALL_TOPICS):
             if auth.update_progress(st.session_state.username, new_index):
+                st.balloons() # 🎉 Celebration!
+                import time
+                time.sleep(1.5) # Let user see the balloons
+                
                 st.session_state.current_topic_index = new_index
                 st.session_state.chain = None # Rebuild chain for new topic context
                 # Add a system notification in chat
@@ -253,6 +265,7 @@ with st.sidebar:
             else:
                 st.error("Failed to update progress (DB Error).")
         else:
+            st.balloons()
             st.success("You have completed the tutorial!")
 
     st.markdown("---")
