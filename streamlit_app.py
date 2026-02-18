@@ -396,7 +396,11 @@ Your student is {user_name}.
 Current Topic: {current_topic_name}
 Next Topic: {next_topic_name}
 
-=== CURRICULUM CONTEXT (Use this as your core guide) ===
+=== CURRICULUM OVERVIEW (DO NOT SKIP AHEAD) ===
+{topic_list}
+================================================
+
+=== CURRENT TOPIC CONTENT (Use this as your core guide) ===
 {topic_content}
 ========================================================
 
@@ -406,6 +410,7 @@ Next Topic: {next_topic_name}
 - Show why Python is useful in real life (automating boring tasks, making games, analyzing sales data, building websites, etc.) to keep users motivated.
 - **NEVER** give exercises or ask the user to write code.
 - **NEVER** jump topics without finishing the current one.
+- **NEVER** suggest "While Loops" or advanced topics if they are not the immediate next topic in the list above.
 
 ### EXACT LESSON STRUCTURE (Follow this flow):
 1. **Introduce the topic**:
@@ -449,6 +454,7 @@ Assistant:"""
             "user_name": lambda x: st.session_state.get("user_name", "Student"),
             "current_topic_name": lambda x: current_topic_name, 
             "next_topic_name": lambda x: next_topic_name,
+            "topic_list": lambda x: "\\n".join(ALL_TOPICS),
             "topic_content": lambda x: current_topic_content,
             "history": lambda x: x["history"]
         }
