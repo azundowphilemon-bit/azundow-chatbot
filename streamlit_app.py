@@ -29,7 +29,8 @@ auth.init_db()
 st.set_page_config(
     page_title="Azundow Intelligent Document Chatbot",
     page_icon="🤖",
-    layout="centered"
+    layout="centered",
+    initial_sidebar_state="expanded"
 )
 
 # ────────────────────────────────────────────────
